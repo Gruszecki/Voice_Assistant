@@ -1,16 +1,14 @@
 import os
-import playsound
+import pyttsx3
 import speech_recognition as sr
 import time
-from gtts import gTTS
 
 
 def speak(text: str):
-    tts = gTTS(text=text, lang='pl')
-    filename = 'voice.mp3'
-    tts.save(filename)
-    playsound.playsound(filename)
-    os.remove(filename)
+    engine = pyttsx3.init()
+    engine.setProperty('rate', 175)
+    engine.say(text)
+    engine.runAndWait()
 
 
 def get_audio():
@@ -31,4 +29,3 @@ def get_audio():
 
 
 speak('Nazywam się Felicjankobot. Jak mogę ci pomóc?')
-text = get_audio()
