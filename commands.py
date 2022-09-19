@@ -14,22 +14,25 @@ from communication import speak, get_audio
 WAKE = 'janko'
 
 commands_list = {
-    'say_time': [
+    'say_time()': [
         'która godzina',
         'jaki mamy czas',
         'która jest',
         'jaki jest czas'
     ],
-    'open_app': [
+    'open_app()': [
         'otwórz aplikację',
         'otwórz program',
         'włącz aplikację',
         'włącz program'
     ],
-    'press_key': [
-        'wciśnij klawisz'
+    'press_key(text)': [
+        'wciśnij klawisz',
+        'naciśnij klawisz',
+        'wciśnij przycisk',
+        'naciśnij przycisk'
     ],
-    'click_on_screen': [
+    'click_on_screen(text)': [
         'kliknij'
     ]
 }
@@ -42,8 +45,8 @@ mouse = pynput.mouse.Controller()
 
 
 def greetings():
-    speak(f'Nazywam się Janka. Jestem asystentem głosowym. Jeśli będziesz mnie potrzebował, zawołaj mnie: {WAKE}')
-    # speak(f'Zawołaj mnie: {WAKE}')
+    # speak(f'Nazywam się Janka. Jestem asystentem głosowym. Jeśli będziesz mnie potrzebował, zawołaj mnie: {WAKE}')
+    speak(f'Zawołaj mnie: {WAKE}')
 
 def validate_text(text):
     match text:
@@ -79,11 +82,23 @@ def execute_command(text):
     for key, value in commands_list.items():
         for v in value:
             if v in text:
-                exec(f'{key}()')
+                exec(f'{key}')
                 return 1
 
     return 0
 
+def get_target_object(text: str, split_counter: int, ask_text: str):
+    target_object = ''.join(text.split()[split_counter:])
+
+    # Check whether object is already provided or ask for it
+    if target_object == '':
+        speak(ask_text)
+        target_object = validate_text(get_audio())
+
+        if not target_object:
+            return 0
+
+    return target_object
 
 def say_time():
     time_now = str(datetime.datetime.now().time()).split(':')
@@ -120,34 +135,39 @@ def open_app():
         except KeyError:
             speak(f'Nie odnaleziono adresu aplikacji {text} w pliku konfiguracyjnym.')
 
-def press_key():
-    speak('Jaki klawisz mam wcisnąć?')
-    text = validate_text(get_audio())
+def press_key(initial_text: str):
+    target_object = get_target_object(initial_text, 2, 'Jaki klawisz mam wcisnąć?')
 
-    if text:
-        if len(text) == 1 and text.isalnum():
+    if target_object:
+        if len(target_object) == 1 and target_object.isalnum():
             try:
-                keyboard.press(text)
-                keyboard.release(text)
+                pynput.keyboard.press(target_object)
+                pynput.keyboard.release(target_object)
             except AttributeError:
-                speak(f'Nie mogę wcisnąć klawisza {text}')
+                speak(f'Nie mogę wcisnąć klawisza {target_object}')
         else:
-            match text:
+            match target_object:
                 case 'start':
-                    text = 'cmd'
+                    target_object = 'cmd'
+                case 'escape':
+                    target_object = 'esc'
+                case 'tabulator':
+                    target_object = 'tab'
 
             try:
-                exec(f'keyboard.press(pynput.keyboard.Key.{text})')
-                exec(f'keyboard.release(pynput.keyboard.Key.{text})')
+                exec(f'keyboard.press(pynput.keyboard.Key.{target_object})')
+                exec(f'keyboard.release(pynput.keyboard.Key.{target_object})')
             except AttributeError:
-                speak(f'Nie mogę wcisnąć klawisza {text}')
+                speak(f'Nie mogę wcisnąć klawisza {target_object}')
 
-def click_on_screen():
-    speak('Co mam kliknąć?')
-    voice_text = validate_text(get_audio())
 
-    if voice_text:
-        speak(f'Szukam {voice_text}')
+
+
+def click_on_screen(initial_text: str):
+    target_object = get_target_object(initial_text, 1, 'Co mam kliknąć?')
+
+    if target_object:
+        speak(f'Szukam {target_object}')
         with mss.mss() as sct:
             screenshot = sct.shot(mon=1, output='last_screenshot.png')
 
@@ -155,7 +175,7 @@ def click_on_screen():
             detected = reader.detect(screenshot, width_ths=0.7, mag_ratio=1.5)
             text_coordinates = detected[0][0]
             recognized = reader.recognize(screenshot, horizontal_list=text_coordinates, free_list=[])
-            border_coordinates = [[txt[0][0], txt[0][2]] for txt in recognized if txt[1].lower() == voice_text]
+            border_coordinates = [[txt[0][0], txt[0][2]] for txt in recognized if txt[1].lower() == target_object]
 
             if len(border_coordinates):
                 target_x = int((border_coordinates[0][0][0] + border_coordinates[0][1][0]) / 2)
@@ -164,4 +184,5 @@ def click_on_screen():
                 mouse.position = (target_x, target_y)
                 mouse.click(pynput.mouse.Button.left, count=1)
             else:
-                speak(f'Nie znalazłam {voice_text}')
+                speak(f'Nie znalazłam {target_object}')
+
