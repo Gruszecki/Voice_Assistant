@@ -34,14 +34,18 @@ commands_list = {
     ],
     'click_on_screen(text)': [
         'kliknij'
+    ],
+    'type(text)': [
+        'wpisz',
+        'pisz'
     ]
 }
 
 config = ConfigParser()
 config.read('config.ini')
 
-keyboard = pynput.keyboard.Controller()
-mouse = pynput.mouse.Controller()
+keyboard_controller = pynput.keyboard.Controller()
+mouse_controller = pynput.mouse.Controller()
 
 
 def greetings():
@@ -88,7 +92,7 @@ def execute_command(text):
     return 0
 
 def get_target_object(text: str, split_counter: int, ask_text: str):
-    target_object = ''.join(text.split()[split_counter:])
+    target_object = ' '.join(text.split()[split_counter:])
 
     # Check whether object is already provided or ask for it
     if target_object == '':
@@ -141,8 +145,8 @@ def press_key(initial_text: str):
     if target_object:
         if len(target_object) == 1 and target_object.isalnum():
             try:
-                pynput.keyboard.press(target_object)
-                pynput.keyboard.release(target_object)
+                keyboard_controller.press(target_object)
+                keyboard_controller.release(target_object)
             except AttributeError:
                 speak(f'Nie mogę wcisnąć klawisza {target_object}')
         else:
@@ -155,13 +159,10 @@ def press_key(initial_text: str):
                     target_object = 'tab'
 
             try:
-                exec(f'keyboard.press(pynput.keyboard.Key.{target_object})')
-                exec(f'keyboard.release(pynput.keyboard.Key.{target_object})')
+                exec(f'keyboard_controller.press(pynput.keyboard.Key.{target_object})')
+                exec(f'keyboard_controller.release(pynput.keyboard.Key.{target_object})')
             except AttributeError:
                 speak(f'Nie mogę wcisnąć klawisza {target_object}')
-
-
-
 
 def click_on_screen(initial_text: str):
     target_object = get_target_object(initial_text, 1, 'Co mam kliknąć?')
@@ -181,8 +182,48 @@ def click_on_screen(initial_text: str):
                 target_x = int((border_coordinates[0][0][0] + border_coordinates[0][1][0]) / 2)
                 target_y = int((border_coordinates[0][0][1] + border_coordinates[0][1][1]) / 2)
 
-                mouse.position = (target_x, target_y)
-                mouse.click(pynput.mouse.Button.left, count=1)
+                mouse_controller.position = (target_x, target_y)
+                mouse_controller.click(pynput.mouse.Button.left, count=1)
             else:
                 speak(f'Nie znalazłam {target_object}')
 
+def make_transcription(text: str):
+    capital = True
+    result_text = ''
+    for word in text.split():
+        match word:
+            case 'kropka':
+                result_text += '\b. '
+                capital = True
+            case 'przecinek':
+                result_text += '\b, '
+            case 'pytajnik':
+                result_text += '\b? '
+            case 'dwukropek':
+                result_text += '\b: '
+            case 'średnik':
+                result_text += '\b; '
+            case 'ukośnik' | 'slash':
+                result_text += '\b/'
+            case 'nawias':
+                if result_text.count('(') > result_text.count(')'):
+                    result_text += '\b) '
+                else:
+                    result_text += '('
+            case 'xd':
+                result_text += 'xD '
+            case _:
+                if not capital:
+                    result_text += f'{word} '
+                else:
+                    result_text += f'{word.capitalize()} '
+                    capital = False
+
+    return result_text
+
+def type(initial_text: str):
+    target_object = get_target_object(initial_text, 1, 'Co mam wpisać?')
+
+    if target_object:
+        target_text = make_transcription(target_object)
+        keyboard_controller.type(target_text)
