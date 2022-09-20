@@ -11,8 +11,6 @@ from PIL import Image, ImageDraw
 from communication import speak, get_audio
 
 
-WAKE = 'janko'
-
 commands_list = {
     'say_time()': [
         'która godzina',
@@ -20,11 +18,13 @@ commands_list = {
         'która jest',
         'jaki jest czas'
     ],
-    'open_app()': [
+    'open_app(text)': [
         'otwórz aplikację',
         'otwórz program',
         'włącz aplikację',
-        'włącz program'
+        'włącz program',
+        'uruchom aplikację',
+        'uruchom program',
     ],
     'press_key(text)': [
         'wciśnij klawisz',
@@ -36,10 +36,11 @@ commands_list = {
         'kliknij'
     ],
     'type(text)': [
-        'wpisz',
-        'pisz'
+        'pisz'      # Must be one command only
     ]
 }
+WAKE = 'janko'
+
 
 config = ConfigParser()
 config.read('config.ini')
@@ -75,10 +76,23 @@ def listen():
                 speak('Żegnam ozięble.')
                 return 0
             else:
-                result = execute_command(text)
+                command_to_type = ''
+                if commands_list['type(text)'][0] in text:
+                    index_to_type = text.index(commands_list['type(text)'][0])
+                    command_to_type = text[index_to_type:]
+                    text = text[:index_to_type]
 
-                if not result:
-                    speak(f'Nie znalazłam akcji dla: {text}')
+                commands_split = text.split(' i ')
+                commands = [command for command in commands_split if len(command)]
+
+                if len(command_to_type):
+                    commands.append(command_to_type)
+
+                for command in commands:
+                    result = execute_command(command)
+
+                    if not result:
+                        speak(f'Nie znalazłam akcji dla: {command}')
 
     return 1
 
@@ -128,16 +142,15 @@ def say_time():
 
     speak(text)
 
-def open_app():
-    speak('Jaką aplikację mam otworzyć?')
-    text = validate_text(get_audio())
+def open_app(initial_text: str):
+    target_object = get_target_object(initial_text, 2, 'Jaką aplikację mam otworzyć?')
 
-    if text:
+    if target_object:
         try:
-            app_path = config['apps'][text]
+            app_path = config['apps'][target_object]
             subprocess.Popen(app_path)
         except KeyError:
-            speak(f'Nie odnaleziono adresu aplikacji {text} w pliku konfiguracyjnym.')
+            speak(f'Nie odnaleziono adresu aplikacji {target_object} w pliku konfiguracyjnym.')
 
 def press_key(initial_text: str):
     target_object = get_target_object(initial_text, 2, 'Jaki klawisz mam wcisnąć?')
@@ -184,6 +197,8 @@ def click_on_screen(initial_text: str):
 
                 mouse_controller.position = (target_x, target_y)
                 mouse_controller.click(pynput.mouse.Button.left, count=1)
+
+                speak('Wuala.')
             else:
                 speak(f'Nie znalazłam {target_object}')
 
@@ -203,6 +218,8 @@ def make_transcription(text: str):
                 result_text += '\b: '
             case 'średnik':
                 result_text += '\b; '
+            case 'myślnik':
+                result_text += '- '
             case 'ukośnik' | 'slash':
                 result_text += '\b/'
             case 'nawias':
@@ -210,6 +227,13 @@ def make_transcription(text: str):
                     result_text += '\b) '
                 else:
                     result_text += '('
+            case 'cudzysłów':
+                if result_text.count('"')/2:
+                    result_text += '\b" '
+                else:
+                    result_text += '"'
+            case 'enter':
+                result_text += '\n'
             case 'xd':
                 result_text += 'xD '
             case _:
@@ -222,8 +246,10 @@ def make_transcription(text: str):
     return result_text
 
 def type(initial_text: str):
-    target_object = get_target_object(initial_text, 1, 'Co mam wpisać?')
+    key_word_place = initial_text.split().index(*commands_list['type(text)']) + 1
+    target_object = get_target_object(initial_text, key_word_place, 'Co mam wpisać?')
 
     if target_object:
         target_text = make_transcription(target_object)
         keyboard_controller.type(target_text)
+
